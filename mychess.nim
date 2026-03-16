@@ -118,6 +118,7 @@ proc main =
   stdout.write "♔♕♖♗♘♙ NIM CHESS ENGINE INTERFACE ♟♞♝♜♛♚\n"
   stdout.write "Starting Stockfish engine..."
   var engine = newUciEngine("stockfish")
+  defer: engine.quit()
 
   # Set hash to 1024 MB (1GB) before playing
   engine.setOption("Hash", "1024")
