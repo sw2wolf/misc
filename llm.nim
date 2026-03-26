@@ -1,5 +1,5 @@
 ###
-used to study Transformer Theory!
+# used to study Transformer Theory!
 ###
 import std / [math, sequtils, random, strformat, times]
 
@@ -66,13 +66,13 @@ proc matmul(a, b: Matrix): Matrix =
         sum += a[i][k] * b[k][j]
       result[i][j] = sum
 
-proc matmulVec(m: Matrix, v: seq[float64]): seq[float64] =
-  result = newSeq[float64](m.len)
-  for i in 0..<m.len:
-    var sum = 0.0
-    for j in 0..<v.len:
-      sum += m[i][j] * v[j]
-    result[i] = sum
+#proc matmulVec(m: Matrix, v: seq[float64]): seq[float64] =
+#  result = newSeq[float64](m.len)
+#  for i in 0..<m.len:
+#    var sum = 0.0
+#    for j in 0..<v.len:
+#      sum += m[i][j] * v[j]
+#    result[i] = sum
 
 proc transpose*(a: Matrix): Matrix =
   result = newSeq[seq[float64]](a[0].len)
