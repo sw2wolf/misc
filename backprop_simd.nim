@@ -17,7 +17,7 @@ when UseSimd:
     Float64x4* = simd[float64, SimdWidth]
 
   proc simdLoad*(aptr: ptr float64): Float64x4 {.inline.} =
-    result = simd[float64, SimdWidth](ptr)
+    result = simd[float64, SimdWidth](aptr)
 
   proc simdStore*(aptr: ptr float64, val: Float64x4) {.inline.} =
     simdStore(ptr, val)
