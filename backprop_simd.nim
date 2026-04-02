@@ -20,7 +20,7 @@ when UseSimd:
     result = simd[float64, SimdWidth](aptr)
 
   proc simdStore*(aptr: ptr float64, val: Float64x4) {.inline.} =
-    simdStore(ptr, val)
+    simdStore(aptr, val)
 
 # ============================================
 # Matrix Structure with SIMD Alignment
