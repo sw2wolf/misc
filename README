@@ -1,2 +1,27 @@
 mychess.nim:  A chess client which can play chess with stockfish in terminal.
 main.rs: A Chinese Chess app which can play with Pikafish,etc.
+
+pkg update && pkg upgrade
+pkg install git clang make
+git clone https://github.com/official-pikafish/Pikafish.git
+cd Pikafish/src
+# compile for aarch64‑android (Termux)
+make -j profile-build ARCH=native
+
+pkg install rust git
+git clone https://github.com/tuasananh/lingine.git
+cd lingine
+cargo build --release
+./target/release/lingine
+
+./pikafish
+uci
+isready
+ucinewgame
+position startpos
+go depth 8
+stop
+quit
+
+echo -e "uci\nisready\nucinewgame\nposition startpos\ngo depth 12\nquit" | ~/pikafish
+
