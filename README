@@ -1,1 +1,2 @@
 mychess.nim:  A chess client which can play chess with stockfish in terminal.
+main.rs: A Chinese Chess app which can play with Pikafish,etc.
