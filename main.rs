@@ -8,7 +8,7 @@ use std::process::{Command, Child, ChildStdin, ChildStdout, Stdio};
 
 // ============================================================
 // 中国象棋引擎 - Rust实现 (UCI + 终端双模式) v2.3
-// 新增: UCI协议支持，可与Pikafish等GUI对弈
+// 新增: UCI协议支持，可与Pikafish, lingine引擎等对弈
 // ============================================================
 
 //const EMPTY: u8 = 0;
@@ -671,7 +671,7 @@ impl Searcher {
 
 
 // ============================================================
-// UCI 引擎通信 (与 Pikafish 等外部引擎对弈)
+// UCI 引擎通信
 // ============================================================
 
 struct UciEngine {
@@ -757,7 +757,7 @@ impl UciEngine {
 // ============================================================
 
 fn move_to_uci(m: &Move) -> String {
-    // Pikafish UCI: row 0 = 红方底线 (内部 board[9]), row 9 = 黑方底线 (内部 board[0])
+    // UCI: row 0 = 红方底线 (内部 board[9]), row 9 = 黑方底线 (内部 board[0])
     format!("{}{}{}{}",
         (b'a' + m.from_c as u8) as char,
         (b'0' + (9 - m.from_r) as u8) as char,
@@ -985,43 +985,74 @@ fn uci_loop() {
 // ============================================================
 
 fn print_board(b: &Board, sel_r: i32, sel_c: i32, targets: &[(i32, i32)]) {
-    print!("[2J[H");
+    // 清屏并回到左上角
+    print!("\x1b[2J\x1b[H");
     let _ = io::stdout().flush();
 
     println!();
-    println!("{}", yellow("      ╔══════════ 中国象棋 ══════════╗"));
+    println!("{}", yellow(&format!("{}{} 中国象棋 {}", " ".repeat(12), "═".repeat(10), "═".repeat(10))));
     println!();
-    println!("         0    1    2    3    4    5    6    7    8");
-    println!("       +----+----+----+----+----+----+----+----+----+");
+    // 顶部列坐标 0~8
+    print!("{}", " ".repeat(8));
+    for c in 0..9 {
+        print!("{}{}", c, " ".repeat(4));
+    }
+    println!("\n");
 
     for r in 0..10 {
-        print!("     {} │", r);
+        print!("{}{} ", " ".repeat(6), r); // 左侧行号
         for c in 0..9 {
-            let p = b.board[r][c];
+            let piece = b.board[r][c];
             let is_sel = r as i32 == sel_r && c as i32 == sel_c;
             let is_tgt = targets.contains(&(r as i32, c as i32));
 
-            let name = if p == 0 { "  " } else { PIECE_NAMES[p as usize] };
+            let mut cell = if piece == 0 { "│" } else { PIECE_NAMES[piece as usize] }.to_string();
 
-            let mut cell = name.to_string();
+            // 选中/可落子底色
             if is_sel {
                 cell = bg_select(&cell);
             } else if is_tgt {
                 cell = bg_target(&cell);
             }
-
-            if p != 0 {
-                cell = if is_red(p) { red(&cell) } else { blue(&cell) };
+            // 棋子上色
+            if piece != 0 {
+                cell = if is_red(piece) { red(&cell) } else { blue(&cell) };
             }
-            print!(" {} │", cell);
+            print!("{}", cell);
+            // 列之间横线分隔 ───
+            if c < 8 {
+                if piece != 0 { print!("───"); }
+                else { print!("────"); }
+            }
         }
         println!();
+
         if r < 9 {
-            println!("       +----+----+----+----+----+----+----+----+----+");
+            print!("{}"," ".repeat(8));
+            // 楚河汉界分割：r=4 和 r=5之间
+            if r == 4 {
+                println!("{}{}~~~~~{}~~~~~{}{}","│"," ".repeat(8)," ".repeat(13)," ".repeat(8), "│");
+                continue;
+            }
+
+            for c in 0..9 {
+                let mut cell = format!("{}{}", "│", " ".repeat(4));
+                if (c==3 && (r==0 || r==7)) || 
+                   (c==4 && (r==1 || r==8)) {
+                    cell = format!("{}{}", "│ \\", " ".repeat(2));
+                }
+                else if (c==3 && (r==1 || r==8)) || 
+                   (c==4 && (r==0 || r==7)) {
+                    cell = format!("{}{}", "│ /", " ".repeat(2));
+                }
+                print!("{}", cell);
+            }
+            println!();
         }
     }
-    println!("       +----+----+----+----+----+----+----+----+----+");
+
     println!();
+    // 当前回合提示
     if b.red_turn {
         println!("{}", green("      ► 轮到: 红方 (帅)"));
     } else {
@@ -1068,7 +1099,7 @@ fn terminal_mode() {
     println!("{}", yellow("  ║  2. 人机对弈 (玩家执黑后走)               ║"));
     println!("{}", yellow("  ║  3. AI自战演示                            ║"));
     println!("{}", yellow("  ║  4. 人人对弈                              ║"));
-    println!("{}", yellow("  ║  5. 与 Pikafish 对弈 (UCI外部引擎)        ║"));
+    println!("{}", yellow("  ║  5. 与外部引擎对弈                        ║"));
     println!("{}", yellow("  ╚═══════════════════════════════════════════╝"));
     println!();
     print!("  选择模式 (1-5): ");
@@ -1080,24 +1111,24 @@ fn terminal_mode() {
 
     let ai_delay = if mode == 3 { 500 } else { 0 };
 
-    // Pikafish 引擎设置
-    let mut pikafish_engine: Option<UciEngine> = None;
-    let mut pikafish_time = 3000u64;
+    // 引擎设置
+    let mut lingine_engine: Option<UciEngine> = None;
+    let mut lingine_time = 5000u64;
     let mut player_is_red = true;
 
     if mode == 5 {
         println!();
-        print!("  输入 Pikafish 引擎路径 (如 ./pikafish): ");
+        print!("  输入引擎路径 (如 ./lingine): ");
         let _ = io::stdout().flush();
         let path = read_line();
-        //let pikafish_path = if path.is_empty() { "./pikafish" } else { &path };
-        let pikafish_path = if path.is_empty() { "/data/data/com.termux/files/home/bin/pikafish"} else { &path };
+        //let lingine_path = if path.is_empty() { "./lingine" } else { &path };
+        let lingine_path = if path.is_empty() { "/data/data/com.termux/files/home/bin/lingine"} else { &path };
 
-        print!("  Pikafish 每步思考时间(ms) [默认3000]: ");
+        print!("  引擎每步思考时间(ms) [默认5000]: ");
         let _ = io::stdout().flush();
         let time_str = read_line();
         if let Ok(t) = time_str.parse::<u64>() {
-            if t > 0 { pikafish_time = t; }
+            if t > 0 { lingine_time = t; }
         }
 
         print!("  玩家执红先走? (y/n) [默认y]: ");
@@ -1106,17 +1137,17 @@ fn terminal_mode() {
         player_is_red = color_str.is_empty() || color_str.starts_with('y');
 
         println!();
-        println!("  正在启动 Pikafish...");
-        match UciEngine::new(pikafish_path) {
+        println!("  正在启动外部引擎 ...");
+        match UciEngine::new(lingine_path) {
             Ok(engine) => {
-                pikafish_engine = Some(engine);
-                println!("  ✓ Pikafish 已连接！");
-                println!("  玩家执{}, Pikafish 执{}",
+                lingine_engine = Some(engine);
+                println!("  ✓ 已连接！");
+                println!("  玩家执{}, 外部引擎执{}",
                     if player_is_red { "红" } else { "黑" },
                     if player_is_red { "黑" } else { "红" });
             }
             Err(e) => {
-                println!("  ✗ 无法启动 Pikafish: {}", e);
+                println!("  ✗ 无法启动外部引擎: {}", e);
                 println!("  请检查路径是否正确，按 Enter 退出...");
                 let _ = read_line();
                 return;
@@ -1214,38 +1245,37 @@ fn terminal_mode() {
                 }
             }
         } else if mode == 5 {
-            // Pikafish 引擎走子
-            println!("  Pikafish 思考中...");
-            if let Some(ref mut engine) = pikafish_engine {
+            println!("  引擎思考中...");
+            if let Some(ref mut engine) = lingine_engine {
                 let fen = board.to_fen();
                 let pos_cmd = format!("position fen {}", fen);
-                match engine.get_best_move(&pos_cmd, pikafish_time) {
+                match engine.get_best_move(&pos_cmd, lingine_time) {
                     Ok(uci_move) => {
                         if let Some(m) = board.uci_move_to_move(&uci_move) {
-                            let p = board.board[m.from_r as usize][m.from_c as usize];
-                            let t = board.board[m.to_r as usize][m.to_c as usize];
+                            //let p = board.board[m.from_r as usize][m.from_c as usize];
+                            //let t = board.board[m.to_r as usize][m.to_c as usize];
                             board.make_move(m);
                             print_board(&board, -1, -1, &[]);
-                            print!("  Pikafish: {} ", uci_move);
-                            if p != 0 {
+                            //print!("引擎:  {} ", uci_move);
+                            /*if p != 0 {
                                 print!("({})", PIECE_NAMES[p as usize]);
                             }
                             if t != 0 {
                                 print!(" 吃{}", PIECE_NAMES[t as usize]);
-                            }
-                            println!();
+                            }*/
+                            //println!();
                         } else {
-                            println!("  ✗ Pikafish 返回非法走法: {}", uci_move);
+                            println!("  ✗ 引擎返回非法走法: {}", uci_move);
                             break;
                         }
                     }
                     Err(e) => {
-                        println!("  ✗ Pikafish 通信错误: {}", e);
+                        println!("  ✗ 引擎通信错误: {}", e);
                         break;
                     }
                 }
             } else {
-                println!("  ✗ Pikafish 引擎未连接！");
+                println!("  ✗ 引擎未连接！");
                 break;
             }
         } else {
@@ -1274,8 +1304,7 @@ fn terminal_mode() {
         }
     }
 
-    // 清理 Pikafish 引擎
-    if let Some(mut engine) = pikafish_engine {
+    if let Some(mut engine) = lingine_engine {
         engine.quit();
     }
 }
