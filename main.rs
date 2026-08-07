@@ -6,10 +6,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::process::{Command, Child, ChildStdin, ChildStdout, Stdio};
 
-// ============================================================
+// ========================================================
 // 中国象棋引擎 - Rust实现 (UCI + 终端双模式) v2.3
 // 新增: UCI协议支持，可与Pikafish, lingine引擎等对弈
-// ============================================================
+// ========================================================
 
 //const EMPTY: u8 = 0;
 const R_KING: u8 = 1;
@@ -31,6 +31,19 @@ const PIECE_NAMES: [&str; 15] = [
     "  ", "帅", "仕", "相", "马", "车", "炮", "兵",
     "将", "士", "象", "马", "车", "炮", "卒"
 ];
+
+const SPACE: &str = " ";
+const H_LINE: &str = "─";
+const V_LINE: &str = "│";
+
+// 使用 \u{2000} 转义序列
+// const EN_SPACE: char = '\u{2000}';
+// const HALF_SPACE: &str = "\u{2000}";
+
+use std::sync::OnceLock;
+
+// ✅ Thread-safe mutable global
+static ENGINE_MOVE: OnceLock<String> = OnceLock::new();
 
 fn red(s: &str) -> String { format!("\x1b[1;31m{}\x1b[0m", s) }
 fn blue(s: &str) -> String { format!("\x1b[1;34m{}\x1b[0m", s) }
@@ -81,7 +94,7 @@ impl Board {
         Board { board: b, red_turn: true, history: Vec::new(), captured: Vec::new() }
     }
 
-    // ==================== FEN 解析 / 生成 ====================
+    // ==================== FEN 解析 / 生成 ===============
     fn from_fen(fen: &str) -> Result<Self, String> {
         let mut board = [[0u8; 9]; 10];
         let parts: Vec<&str> = fen.split_whitespace().collect();
@@ -980,9 +993,9 @@ fn uci_loop() {
     }
 }
 
-// ============================================================
+// ========================================================
 // 终端UI
-// ============================================================
+// ========================================================
 
 fn print_board(b: &Board, sel_r: i32, sel_c: i32, targets: &[(i32, i32)]) {
     // 清屏并回到左上角
@@ -990,23 +1003,23 @@ fn print_board(b: &Board, sel_r: i32, sel_c: i32, targets: &[(i32, i32)]) {
     let _ = io::stdout().flush();
 
     println!();
-    println!("{}", yellow(&format!("{}{} 中国象棋 {}", " ".repeat(12), "═".repeat(10), "═".repeat(10))));
+    println!("{}", yellow(&format!("{}{} 中国象棋 {}", SPACE.repeat(12), "═".repeat(10), "═".repeat(10))));
     println!();
     // 顶部列坐标 0~8
-    print!("{}", " ".repeat(8));
+    print!("{}", SPACE.repeat(8));
     for c in 0..9 {
-        print!("{}{}", c, " ".repeat(4));
+        print!("{}{}", c, SPACE.repeat(4));
     }
     println!("\n");
 
     for r in 0..10 {
-        print!("{}{} ", " ".repeat(6), r); // 左侧行号
+        print!("{}{} ", SPACE.repeat(6), r); // 左侧行号
         for c in 0..9 {
             let piece = b.board[r][c];
             let is_sel = r as i32 == sel_r && c as i32 == sel_c;
             let is_tgt = targets.contains(&(r as i32, c as i32));
 
-            let mut cell = if piece == 0 { "│" } else { PIECE_NAMES[piece as usize] }.to_string();
+            let mut cell = if piece == 0 { V_LINE } else { PIECE_NAMES[piece as usize] }.to_string();
 
             // 选中/可落子底色
             if is_sel {
@@ -1019,31 +1032,31 @@ fn print_board(b: &Board, sel_r: i32, sel_c: i32, targets: &[(i32, i32)]) {
                 cell = if is_red(piece) { red(&cell) } else { blue(&cell) };
             }
             print!("{}", cell);
-            // 列之间横线分隔 ───
+            // 列之间横线分隔
             if c < 8 {
-                if piece != 0 { print!("───"); }
-                else { print!("────"); }
+                if piece != 0 { print!("{}", H_LINE.repeat(3)); }
+                else { print!("{}",H_LINE.repeat(4)); }
             }
         }
         println!();
 
         if r < 9 {
-            print!("{}"," ".repeat(8));
+            print!("{}",SPACE.repeat(8));
             // 楚河汉界分割：r=4 和 r=5之间
             if r == 4 {
-                println!("{}{}~~~~~{}~~~~~{}{}","│"," ".repeat(8)," ".repeat(13)," ".repeat(8), "│");
+                println!("{}{}~~~~~{}~~~~~{}{}", V_LINE,SPACE.repeat(8),SPACE.repeat(13),SPACE.repeat(8), V_LINE);
                 continue;
             }
 
             for c in 0..9 {
-                let mut cell = format!("{}{}", "│", " ".repeat(4));
+                let mut cell = format!("{}{}", V_LINE, SPACE.repeat(4));
                 if (c==3 && (r==0 || r==7)) || 
                    (c==4 && (r==1 || r==8)) {
-                    cell = format!("{}{}", "│ \\", " ".repeat(2));
+                    cell = format!("{}{}{}", "│", " \\", SPACE.repeat(2));
                 }
                 else if (c==3 && (r==1 || r==8)) || 
                    (c==4 && (r==0 || r==7)) {
-                    cell = format!("{}{}", "│ /", " ".repeat(2));
+                    cell = format!("{}{}{}", "│", " /", SPACE.repeat(2));
                 }
                 print!("{}", cell);
             }
@@ -1051,7 +1064,10 @@ fn print_board(b: &Board, sel_r: i32, sel_c: i32, targets: &[(i32, i32)]) {
         }
     }
 
-    println!();
+    if let Some(move_str) = ENGINE_MOVE.get() {
+        println!();
+        println!("引擎: {}", move_str);
+    }
     // 当前回合提示
     if b.red_turn {
         println!("{}", green("      ► 轮到: 红方 (帅)"));
@@ -1255,8 +1271,8 @@ fn terminal_mode() {
                             //let p = board.board[m.from_r as usize][m.from_c as usize];
                             //let t = board.board[m.to_r as usize][m.to_c as usize];
                             board.make_move(m);
+                            ENGINE_MOVE.set(String::from(uci_move)).unwrap();
                             print_board(&board, -1, -1, &[]);
-                            //print!("引擎:  {} ", uci_move);
                             /*if p != 0 {
                                 print!("({})", PIECE_NAMES[p as usize]);
                             }
