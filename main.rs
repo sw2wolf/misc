@@ -40,10 +40,10 @@ const V_LINE: &str = "│";
 // const EN_SPACE: char = '\u{2000}';
 // const HALF_SPACE: &str = "\u{2000}";
 
-use std::sync::OnceLock;
+use std::sync::Mutex;
 
-// ✅ Thread-safe mutable global
-static ENGINE_MOVE: OnceLock<String> = OnceLock::new();
+// ✅ Use Mutex for mutable global state
+static ENGINE_MOVE: Mutex<String> = Mutex::new(String::new());
 
 fn red(s: &str) -> String { format!("\x1b[1;31m{}\x1b[0m", s) }
 fn blue(s: &str) -> String { format!("\x1b[1;34m{}\x1b[0m", s) }
@@ -1063,11 +1063,9 @@ fn print_board(b: &Board, sel_r: i32, sel_c: i32, targets: &[(i32, i32)]) {
             println!();
         }
     }
+    println!();
+    println!("引擎: {}", ENGINE_MOVE.lock().unwrap());
 
-    if let Some(move_str) = ENGINE_MOVE.get() {
-        println!();
-        println!("引擎: {}", move_str);
-    }
     // 当前回合提示
     if b.red_turn {
         println!("{}", green("      ► 轮到: 红方 (帅)"));
@@ -1268,18 +1266,10 @@ fn terminal_mode() {
                 match engine.get_best_move(&pos_cmd, lingine_time) {
                     Ok(uci_move) => {
                         if let Some(m) = board.uci_move_to_move(&uci_move) {
-                            //let p = board.board[m.from_r as usize][m.from_c as usize];
-                            //let t = board.board[m.to_r as usize][m.to_c as usize];
                             board.make_move(m);
-                            ENGINE_MOVE.set(String::from(uci_move)).unwrap();
+                            let move_str = format!("{}{}->{}{}", m.from_r, m.from_c, m.to_r, m.to_c);
+                            *ENGINE_MOVE.lock().unwrap() = move_str;
                             print_board(&board, -1, -1, &[]);
-                            /*if p != 0 {
-                                print!("({})", PIECE_NAMES[p as usize]);
-                            }
-                            if t != 0 {
-                                print!(" 吃{}", PIECE_NAMES[t as usize]);
-                            }*/
-                            //println!();
                         } else {
                             println!("  ✗ 引擎返回非法走法: {}", uci_move);
                             break;
