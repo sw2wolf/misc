@@ -35,6 +35,9 @@ const PIECE_NAMES: [&str; 15] = [
 const SPACE: &str = " ";
 const H_LINE: &str = "─";
 const V_LINE: &str = "│";
+//These two box-drawing chars  ╱  (U+2571) and  ╲  (U+2572) align perfectly with terminal box lines  ─ │ ┌ ┐ , no misalignment.
+const SLASH: &str = "╱";
+const B_SLASH: &str = "╲";
 
 // 使用 \u{2000} 转义序列
 // const EN_SPACE: char = '\u{2000}';
@@ -1052,11 +1055,13 @@ fn print_board(b: &Board, sel_r: i32, sel_c: i32, targets: &[(i32, i32)]) {
                 let mut cell = format!("{}{}", V_LINE, SPACE.repeat(4));
                 if (c==3 && (r==0 || r==7)) || 
                    (c==4 && (r==1 || r==8)) {
-                    cell = format!("{}{}{}", "│", " \\", SPACE.repeat(2));
+                    cell = format!("{}{}{}", "│ ", B_SLASH, SPACE.repeat(2));
+                    //cell = format!("{}{}{}", "│", " \\", SPACE.repeat(2));
                 }
                 else if (c==3 && (r==1 || r==8)) || 
                    (c==4 && (r==0 || r==7)) {
-                    cell = format!("{}{}{}", "│", " /", SPACE.repeat(2));
+                    cell = format!("{}{}{}", "│ ", SLASH, SPACE.repeat(2));
+                    //cell = format!("{}{}{}", "│", " /", SPACE.repeat(2));
                 }
                 print!("{}", cell);
             }
