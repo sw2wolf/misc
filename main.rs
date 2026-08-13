@@ -712,9 +712,55 @@ impl UciEngine {
         let mut engine = UciEngine { process: child, stdin, reader };
         engine.send("uci");
         engine.wait_for("uciok")?;
+        //engine.configure()?;  // 新增配置
         engine.send("isready");
         engine.wait_for("readyok")?;
         Ok(engine)
+    }
+
+//setoption name Hash value 1024
+/*Hash 是引擎的"记忆"，存储已搜索过的局面和评估结果。Hash 越大，重复局面不用重算，棋力提升非常明显。
+设备内存    推荐 Hash 值    说明    
+2 GB    128–256 MB  手机低端配置    
+4 GB    512 MB–1 GB 普通手机    
+8 GB+   2–4 GB  旗舰手机/平板   
+16 GB+  8 GB+   桌面级  
+⚠️ Android 注意：Termux 进程有内存限制，Hash 设太大可能被系统杀掉。建议从 512MB 开始测试，逐步上调。*/
+
+//setoption name Threads value 8
+//线程数超过物理核心反而可能因调度开销降低效率。Android 上建议不超过  nproc  的 80%。
+
+//setoption name Move Overhead value 500
+//防止因系统调度或通信延迟导致超时判负。Android/Termux 环境建议设高一些：
+
+//setoption name Contempt value 24
+/*值	效果	
+0	客观评估，不排斥和棋
+正数（如 24）	更激进，宁愿冒险也要争胜
+负数	更保守，倾向于简化求和*/
+
+    
+//选项	建议
+/*MultiPV	设为 1（默认）。每增加 1 条变线，棋力下降约 30 Elo。分析时才调高。
+    UCI_LimitStrength / UCI_Elo	想下最强就不要开，这是用来故意削弱引擎陪人类练棋的。
+    Clear Hash	只在换局面前调用一次，清理上一局的记忆。*/
+
+    fn configure(&mut self) -> Result<(), String> {
+        // 1. 设置哈希表（根据设备内存调整）
+        self.send("setoption name Hash value 1024");
+        self.wait_for("readyok")?;
+
+        // 2. 设置线程数
+        self.send("setoption name Threads value 8");
+        self.wait_for("readyok")?;
+
+        // 3. 时间补偿（Android 建议）
+        self.send("setoption name Move Overhead value 500");
+        self.wait_for("readyok")?;
+
+        // 4. 如有残局库
+        // self.send("setoption name SyzygyPath value /path/to/syzygy");
+        Ok(())
     }
 
     fn send(&mut self, cmd: &str) {
@@ -1131,23 +1177,24 @@ fn terminal_mode() {
     let ai_delay = if mode == 3 { 500 } else { 0 };
 
     // 引擎设置
-    let mut lingine_engine: Option<UciEngine> = None;
-    let mut lingine_time = 5000u64;
+    let mut outside_engine: Option<UciEngine> = None;
+    let mut engine_time = 7000u64;
     let mut player_is_red = true;
 
     if mode == 5 {
         println!();
-        print!("  输入引擎路径 (如 ./lingine): ");
+        print!("  输入引擎路径 (如 ./pikafish): ");
         let _ = io::stdout().flush();
         let path = read_line();
-        //let lingine_path = if path.is_empty() { "./lingine" } else { &path };
-        let lingine_path = if path.is_empty() { "/data/data/com.termux/files/home/bin/lingine"} else { &path };
+        //let engine_path = if path.is_empty() { "./lingine" } else { &path };
+        //let engine_path = if path.is_empty() { "/data/data/com.termux/files/home/bin/lingine"} else { &path };
+        let engine_path = if path.is_empty() { "/data/data/com.termux/files/home/bin/pikafish"} else { &path };
 
-        print!("  引擎每步思考时间(ms) [默认5000]: ");
+        print!("  引擎每步思考时间(ms) [默认7000]: ");
         let _ = io::stdout().flush();
         let time_str = read_line();
         if let Ok(t) = time_str.parse::<u64>() {
-            if t > 0 { lingine_time = t; }
+            if t > 0 { engine_time = t; }
         }
 
         print!("  玩家执红先走? (y/n) [默认y]: ");
@@ -1157,9 +1204,9 @@ fn terminal_mode() {
 
         println!();
         println!("  正在启动外部引擎 ...");
-        match UciEngine::new(lingine_path) {
+        match UciEngine::new(engine_path) {
             Ok(engine) => {
-                lingine_engine = Some(engine);
+                outside_engine = Some(engine);
                 println!("  ✓ 已连接！");
                 println!("  玩家执{}, 外部引擎执{}",
                     if player_is_red { "红" } else { "黑" },
@@ -1265,10 +1312,10 @@ fn terminal_mode() {
             }
         } else if mode == 5 {
             println!("  引擎思考中...");
-            if let Some(ref mut engine) = lingine_engine {
+            if let Some(ref mut engine) = outside_engine {
                 let fen = board.to_fen();
                 let pos_cmd = format!("position fen {}", fen);
-                match engine.get_best_move(&pos_cmd, lingine_time) {
+                match engine.get_best_move(&pos_cmd, engine_time) {
                     Ok(uci_move) => {
                         if let Some(m) = board.uci_move_to_move(&uci_move) {
                             board.make_move(m);
@@ -1315,7 +1362,7 @@ fn terminal_mode() {
         }
     }
 
-    if let Some(mut engine) = lingine_engine {
+    if let Some(mut engine) = outside_engine {
         engine.quit();
     }
 }
