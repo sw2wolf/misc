@@ -1,4 +1,3 @@
-
 use std::io::{self, Write, BufRead, BufReader};
 use std::time::{Duration, Instant};
 use std::sync::Arc;
@@ -7,11 +6,11 @@ use std::thread;
 use std::process::{Command, Child, ChildStdin, ChildStdout, Stdio};
 
 // ========================================================
-// 中国象棋引擎 - Rust实现 (UCI + 终端双模式) v2.3
+// 中国象棋引擎 - Rust实现 (UCI + 终端双模式)
 // 新增: UCI协议支持，可与Pikafish, lingine引擎等对弈
 // ========================================================
 
-//const EMPTY: u8 = 0;
+const EMPTY: u8 = 0;
 const R_KING: u8 = 1;
 const R_ADVISOR: u8 = 2;
 const R_BISHOP: u8 = 3;
@@ -215,17 +214,17 @@ impl Board {
         for r in 0..10 {
             for c in 0..9 {
                 let p = self.board[r][c];
-                if p == 0 { continue; }
+                if p == EMPTY { continue; }
                 if red && is_red(p) { continue; }
                 if !red && is_black(p) { continue; }
                 match p {
-                    5 | 12 => {
+                    R_ROOK | B_ROOK => {
                         if r == kr && c != kc {
                             let step = if c < kc { 1i32 } else { -1i32 };
                             let mut cc = c as i32 + step;
                             let mut blocked = false;
                             while cc != kc as i32 {
-                                if self.board[r][cc as usize] != 0 { blocked = true; break; }
+                                if self.board[r][cc as usize] != EMPTY { blocked = true; break; }
                                 cc += step;
                             }
                             if !blocked { return true; }
@@ -240,7 +239,7 @@ impl Board {
                             if !blocked { return true; }
                         }
                     }
-                    4 | 11 => {
+                    R_KNIGHT | B_KNIGHT => {
                         let dr = (r as i32 - kr as i32).abs();
                         let dc = (c as i32 - kc as i32).abs();
                         if (dr == 2 && dc == 1) || (dr == 1 && dc == 2) {
@@ -249,18 +248,18 @@ impl Board {
                             } else {
                                 (r as i32, (c as i32 + kc as i32) / 2)
                             };
-                            if in_board(br, bc) && self.board[br as usize][bc as usize] == 0 {
+                            if in_board(br, bc) && self.board[br as usize][bc as usize] == EMPTY {
                                 return true;
                             }
                         }
                     }
-                    6 | 13 => {
+                    R_CANNON | B_CANNON => {
                         if r == kr && c != kc {
                             let step = if c < kc { 1i32 } else { -1i32 };
                             let mut count = 0;
                             let mut cc = c as i32 + step;
                             while cc != kc as i32 {
-                                if self.board[r][cc as usize] != 0 { count += 1; }
+                                if self.board[r][cc as usize] != EMPTY { count += 1; }
                                 cc += step;
                             }
                             if count == 1 { return true; }
@@ -269,25 +268,25 @@ impl Board {
                             let mut count = 0;
                             let mut rr = r as i32 + step;
                             while rr != kr as i32 {
-                                if self.board[rr as usize][c] != 0 { count += 1; }
+                                if self.board[rr as usize][c] != EMPTY { count += 1; }
                                 rr += step;
                             }
                             if count == 1 { return true; }
                         }
                     }
-                    7 => {
+                    R_PAWN => {
                         if r as i32 - 1 == kr as i32 && c == kc { return true; }
                         if r == kr && (c as i32 - kc as i32).abs() == 1 && r <= 5 { return true; }
                     }
-                    14 => {
+                    B_PAWN => {
                         if r as i32 + 1 == kr as i32 && c == kc { return true; }
                         if r == kr && (c as i32 - kc as i32).abs() == 1 && r >= 4 { return true; }
                     }
-                    1 | 8 => {
+                    R_KING | B_KING => {
                         if c == kc {
                             let mut blocked = false;
                             for rr in (std::cmp::min(r, kr) + 1)..std::cmp::max(r, kr) {
-                                if self.board[rr][c] != 0 { blocked = true; break; }
+                                if self.board[rr][c] != EMPTY { blocked = true; break; }
                             }
                             if !blocked { return true; }
                         }
@@ -302,22 +301,22 @@ impl Board {
     fn generate_piece_moves(&self, r: i32, c: i32) -> Vec<Move> {
         let mut moves = Vec::new();
         let p = self.board[r as usize][c as usize];
-        if p == 0 { return moves; }
+        if p == EMPTY { return moves; }
 
         let mut add_if_valid = |tr: i32, tc: i32| {
             if !in_board(tr, tc) { return; }
             let tp = self.board[tr as usize][tc as usize];
-            if tp != 0 && same_side(p, tp) { return; }
+            if tp != EMPTY && same_side(p, tp) { return; }
             let mut ns = self.clone();
             ns.board[tr as usize][tc as usize] = p;
-            ns.board[r as usize][c as usize] = 0;
+            ns.board[r as usize][c as usize] = EMPTY;
             if !ns.is_in_check(is_red(p)) {
                 moves.push(Move::new(r, c, tr, tc));
             }
         };
 
         match p {
-            1 | 8 => {
+            R_KING | B_KING => {
                 for dr in -1i32..=1i32 {
                     for dc in -1i32..=1i32 {
                         if dr.abs() + dc.abs() != 1 { continue; }
@@ -330,7 +329,7 @@ impl Board {
                     }
                 }
             }
-            2 | 9 => {
+            R_ADVISOR | B_ADVISOR => {
                 for dr in -1i32..=1i32 {
                     for dc in -1i32..=1i32 {
                         if dr.abs() != 1 || dc.abs() != 1 { continue; }
@@ -343,7 +342,7 @@ impl Board {
                     }
                 }
             }
-            3 | 10 => {
+            R_BISHOP | B_BISHOP => {
                 for dr in -2i32..=2i32 {
                     for dc in -2i32..=2i32 {
                         if dr.abs() != 2 || dc.abs() != 2 { continue; }
@@ -358,7 +357,7 @@ impl Board {
                     }
                 }
             }
-            4 | 11 => {
+            R_KNIGHT | B_KNIGHT => {
                 let offsets = [(-2i32,-1i32),(-2i32,1i32),(-1i32,-2i32),(-1i32,2i32),(1i32,-2i32),(1i32,2i32),(2i32,-1i32),(2i32,1i32)];
                 for (dr, dc) in offsets {
                     let (tr, tc) = (r + dr, c + dc);
@@ -369,7 +368,7 @@ impl Board {
                     }
                 }
             }
-            5 | 12 => {
+            R_ROOK | B_ROOK => {
                 for dr in -1i32..=1i32 {
                     for dc in -1i32..=1i32 {
                         if dr.abs() + dc.abs() != 1 { continue; }
@@ -384,7 +383,7 @@ impl Board {
                     }
                 }
             }
-            6 | 13 => {
+            R_CANNON | B_CANNON => {
                 for dr in -1i32..=1i32 {
                     for dc in -1i32..=1i32 {
                         if dr.abs() + dc.abs() != 1 { continue; }
@@ -405,11 +404,11 @@ impl Board {
                     }
                 }
             }
-            7 => {
+            R_PAWN => {
                 add_if_valid(r - 1, c);
                 if r <= 5 { add_if_valid(r, c - 1); add_if_valid(r, c + 1); }
             }
-            14 => {
+            B_PAWN => {
                 add_if_valid(r + 1, c);
                 if r >= 4 { add_if_valid(r, c - 1); add_if_valid(r, c + 1); }
             }
@@ -423,7 +422,7 @@ impl Board {
         for r in 0..10 {
             for c in 0..9 {
                 let p = self.board[r][c];
-                if p == 0 { continue; }
+                if p == EMPTY { continue; }
                 if self.red_turn && !is_red(p) { continue; }
                 if !self.red_turn && !is_black(p) { continue; }
                 moves.extend(self.generate_piece_moves(r as i32, c as i32));
@@ -435,7 +434,7 @@ impl Board {
     fn make_move(&mut self, m: Move) {
         self.captured.push(self.board[m.to_r as usize][m.to_c as usize]);
         self.board[m.to_r as usize][m.to_c as usize] = self.board[m.from_r as usize][m.from_c as usize];
-        self.board[m.from_r as usize][m.from_c as usize] = 0;
+        self.board[m.from_r as usize][m.from_c as usize] = EMPTY;
         self.red_turn = !self.red_turn;
         self.history.push(m);
     }
@@ -451,9 +450,9 @@ impl Board {
     }*/
 }
 
-// ============================================================
+// ========================================================
 // 评估函数
-// ============================================================
+// ========================================================
 
 const PIECE_VALUE: [i32; 15] = [
     0, 100000, 250, 250, 500, 1000, 500, 120,
@@ -496,7 +495,7 @@ fn evaluate(b: &Board) -> i32 {
     for r in 0..10 {
         for c in 0..9 {
             let p = b.board[r][c];
-            if p == 0 { continue; }
+            if p == EMPTY { continue; }
             let mut val = PIECE_VALUE[p as usize];
             match p {
                 7 => val += PAWN_POS_R[r][c],
@@ -518,9 +517,9 @@ fn evaluate(b: &Board) -> i32 {
     score
 }
 
-// ============================================================
+// ========================================================
 // Alpha-Beta 搜索
-// ============================================================
+// ========================================================
 
 struct Searcher {
     nodes: u64,
@@ -539,7 +538,7 @@ impl Searcher {
             time_limit: Duration::from_secs_f64(time_limit_secs),
             start_time: Instant::now(),
             history: [[[0; 9]; 10]; 2],
-            max_depth: 6,
+            max_depth: 9,
             stop_flag: None,
             uci_mode: false,
         }
@@ -580,7 +579,7 @@ impl Searcher {
 
         let moves = b.generate_all_moves();
         let mut captures: Vec<Move> = moves.into_iter()
-            .filter(|m| b.board[m.to_r as usize][m.to_c as usize] != 0)
+            .filter(|m| b.board[m.to_r as usize][m.to_c as usize] != EMPTY)
             .collect();
 
         captures.sort_by(|a, b_move| {
@@ -678,7 +677,7 @@ impl Searcher {
             }
         }
         if !self.uci_mode {
-            print!("\r                                      \r");
+            print!("\r\r");
             let _ = io::stdout().flush();
         }
         Some(best_move)
@@ -686,9 +685,9 @@ impl Searcher {
 }
 
 
-// ============================================================
+// ========================================================
 // UCI 引擎通信
-// ============================================================
+// ========================================================
 
 struct UciEngine {
     process: Child,
@@ -745,7 +744,7 @@ impl UciEngine {
     UCI_LimitStrength / UCI_Elo	想下最强就不要开，这是用来故意削弱引擎陪人类练棋的。
     Clear Hash	只在换局面前调用一次，清理上一局的记忆。*/
 
-    fn configure(&mut self) -> Result<(), String> {
+    /*fn configure(&mut self) -> Result<(), String> {
         // 1. 设置哈希表（根据设备内存调整）
         self.send("setoption name Hash value 1024");
         self.wait_for("readyok")?;
@@ -761,7 +760,7 @@ impl UciEngine {
         // 4. 如有残局库
         // self.send("setoption name SyzygyPath value /path/to/syzygy");
         Ok(())
-    }
+    }*/
 
     fn send(&mut self, cmd: &str) {
         let _ = writeln!(self.stdin, "{}", cmd);
@@ -814,9 +813,9 @@ impl UciEngine {
     }
 }
 
-// ============================================================
+// ========================================================
 // UCI 协议支持
-// ============================================================
+// ========================================================
 
 fn move_to_uci(m: &Move) -> String {
     // UCI: row 0 = 红方底线 (内部 board[9]), row 9 = 黑方底线 (内部 board[0])
@@ -1129,17 +1128,17 @@ fn print_board(b: &Board, sel_r: i32, sel_c: i32, targets: &[(i32, i32)]) {
 
 fn coord_input(prompt: &str) -> (i32, i32) {
     loop {
-        print!("{}", prompt);
+        print!("q:quit, {}", prompt);
         let _ = io::stdout().flush();
         let mut input = String::new();
         if io::stdin().read_line(&mut input).is_err() { continue; }
         let input = input.trim();
-        if input.len() >= 2 {
+        if input == "q" { return (-1,-1); }
+        else if input.len() >= 2 {
             if let (Ok(r), Ok(c)) = (input[0..1].parse::<i32>(), input[1..2].parse::<i32>()) {
                 if in_board(r, c) { return (r, c); }
             }
         }
-        println!("    格式: 两位数字如 73 表示第7行第3列");
     }
 }
 
@@ -1149,36 +1148,36 @@ fn read_line() -> String {
     s.trim().to_string()
 }
 
-// ============================================================
+// ========================================================
 // 主程序
-// ============================================================
+// ========================================================
 
 fn terminal_mode() {
     let mut board = Board::new();
 
     println!();
-    println!("{}", yellow("  ╔═══════════════════════════════════════════╗"));
-    println!("{}", yellow("  ║         中国象棋 - Rust引擎 v2.3          ║"));
-    println!("{}", yellow("  ╠═══════════════════════════════════════════╣"));
-    println!("{}", yellow("  ║  1. 人机对弈 (玩家执红先走)               ║"));
-    println!("{}", yellow("  ║  2. 人机对弈 (玩家执黑后走)               ║"));
-    println!("{}", yellow("  ║  3. AI自战演示                            ║"));
-    println!("{}", yellow("  ║  4. 人人对弈                              ║"));
-    println!("{}", yellow("  ║  5. 与外部引擎对弈                        ║"));
-    println!("{}", yellow("  ╚═══════════════════════════════════════════╝"));
+    println!("{}", yellow("  ╔══════════════════════════╗"));
+    println!("{}", yellow("  ║         中国象棋         ║"));
+    println!("{}", yellow("  ╠══════════════════════════╣"));
+    println!("{}", yellow("  ║  1. 人机对弈 (玩家执红)  ║"));
+    println!("{}", yellow("  ║  2. 人机对弈 (玩家执黑)  ║"));
+    println!("{}", yellow("  ║  3. AI自战演示           ║"));
+    println!("{}", yellow("  ║  4. 人人对弈             ║"));
+    println!("{}", yellow("  ║  5. 与外部引擎对弈(*)    ║"));
+    println!("{}", yellow("  ╚══════════════════════════╝"));
     println!();
     print!("  选择模式 (1-5): ");
     let _ = io::stdout().flush();
 
     let mode_str = read_line();
-    let mode: i32 = mode_str.parse().unwrap_or(1);
+    let mode: i32 = mode_str.parse().unwrap_or(5);
     let mode = if mode < 1 || mode > 5 { 1 } else { mode };
 
     let ai_delay = if mode == 3 { 500 } else { 0 };
 
     // 引擎设置
     let mut outside_engine: Option<UciEngine> = None;
-    let mut engine_time = 7000u64;
+    let mut engine_time = 9000u64;
     let mut player_is_red = true;
 
     if mode == 5 {
@@ -1186,11 +1185,9 @@ fn terminal_mode() {
         print!("  输入引擎路径 (如 ./pikafish): ");
         let _ = io::stdout().flush();
         let path = read_line();
-        //let engine_path = if path.is_empty() { "./lingine" } else { &path };
-        //let engine_path = if path.is_empty() { "/data/data/com.termux/files/home/bin/lingine"} else { &path };
         let engine_path = if path.is_empty() { "/data/data/com.termux/files/home/bin/pikafish"} else { &path };
 
-        print!("  引擎每步思考时间(ms) [默认7000]: ");
+        print!("  引擎每步思考时间(ms) [默认9000]: ");
         let _ = io::stdout().flush();
         let time_str = read_line();
         if let Ok(t) = time_str.parse::<u64>() {
@@ -1229,18 +1226,12 @@ fn terminal_mode() {
         if moves.is_empty() {
             if board.is_in_check(board.red_turn) {
                 if board.red_turn {
-                    println!("{}", blue("    ═══════════════════════════════════════"));
                     println!("{}", blue("         黑方胜利！将死红帅！"));
-                    println!("{}", blue("    ═══════════════════════════════════════"));
                 } else {
-                    println!("{}", red("    ═══════════════════════════════════════"));
                     println!("{}", red("         红方胜利！将死黑将！"));
-                    println!("{}", red("    ═══════════════════════════════════════"));
                 }
             } else {
-                println!("{}", yellow("    ═══════════════════════════════════════"));
                 println!("{}", yellow("              和棋！无子可动"));
-                println!("{}", yellow("    ═══════════════════════════════════════"));
             }
             println!();
             println!("  按 Enter 退出...");
@@ -1257,6 +1248,7 @@ fn terminal_mode() {
             let mut valid = false;
             while !valid {
                 let (fr, fc) = coord_input("  选择棋子 (行列如73): ");
+                if fr==-1 && fc==-1 { return; }
                 let p = board.board[fr as usize][fc as usize];
                 if p == 0 {
                     println!("  ⚠ 此处无棋子！");
@@ -1338,7 +1330,7 @@ fn terminal_mode() {
             }
         } else {
             println!("  AI思考中...");
-            let mut searcher = Searcher::new(5.0);
+            let mut searcher = Searcher::new(9.0);
             if let Some(ai_move) = searcher.find_best_move(&board) {
                 let p = board.board[ai_move.from_r as usize][ai_move.from_c as usize];
                 let t = board.board[ai_move.to_r as usize][ai_move.to_c as usize];
