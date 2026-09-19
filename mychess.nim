@@ -116,8 +116,9 @@ proc printResult(result: PlayResult, pos: Position) =
 
 proc main =
   stdout.write "♔♕♖♗♘♙ NIM CHESS ENGINE INTERFACE ♟♞♝♜♛♚\n"
-  stdout.write "Starting Stockfish engine..."
-  var engine = newUciEngine("stockfish")
+  stdout.write "Starting stockfish/Gyatso engine..."
+  #var engine = newUciEngineProcess("Gyatso.out")
+  var engine = newUciEngineProcess("stockfish")
   defer: engine.quit()
 
   # Set hash to 1024 MB (1GB) before playing
@@ -153,7 +154,7 @@ proc main =
     stdout.flushFile()
     #let result = engine.play(pos, Limit(depth: 15))
     # Let the engine think for 5 seconds per move
-    let result = engine.play(pos, Limit(movetimeSeconds: 5))
+    let result = engine.play(pos, Limit(movetimeSeconds: some(5.0)))
 
     printResult(result, pos)
     pos = pos.doMove(result.move)
@@ -211,7 +212,7 @@ proc main =
       stdout.write "Engine thinking..."
       stdout.flushFile()
       #let result = engine.play(pos, Limit(depth: 15))
-      let result = engine.play(pos, Limit(movetimeSeconds: 5))
+      let result = engine.play(pos, Limit(movetimeSeconds: some(5.0)))
       printResult(result, pos)
       pos = pos.doMove(result.move)
 
