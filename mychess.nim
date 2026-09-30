@@ -116,9 +116,13 @@ proc printResult(result: PlayResult, pos: Position) =
 
 proc main =
   stdout.write "♔♕♖♗♘♙ NIM CHESS ENGINE INTERFACE ♟♞♝♜♛♚\n"
+  write(stdout,"  输入引擎路径 (如 ./heimdall): ")
+  stdout.flushFile()
+  let path = stdin.readLine().strip()
+  let enginePath = if path.len == 0: "stockfish" else: path
+
   stdout.write "Starting stockfish/Gyatso engine..."
-  #var engine = newUciEngineProcess("Gyatso.out")
-  var engine = newUciEngineProcess("stockfish")
+  var engine = newUciEngineProcess(enginePath)
   defer: engine.quit()
 
   # Set hash to 1024 MB (1GB) before playing
